@@ -72,6 +72,14 @@ def render_friendly_layer(syn: dict, raw: dict) -> str:
 
     # ── Similar stocks ──
     similar = friendly.get("similar_stocks") or []
+    # v3.9.x · 渲染层防御：该字段在 pipeline 路径下可能是 dict —— fetcher 失败时
+    # DimResult 结构会占住顶层字段位置（见 collect._ensure_top_level_field）。
+    # 渲染层不该因数据形状把整份报告 KeyError 掉。
+    if isinstance(similar, dict):
+        similar = similar.get("similar_stocks") or similar.get("data") or []
+    if not isinstance(similar, list):
+        similar = []
+    similar = [s for s in similar if isinstance(s, dict)]
     similar_pills = ""
     for s in similar[:4]:
         name = s.get("name", "")
@@ -110,7 +118,7 @@ def render_friendly_layer(syn: dict, raw: dict) -> str:
 
 ## ─── 基金经理抄作业面板 ───
 
-def render_fund_managers(managers: list) -> str:
+def render_fund_managers(managers: list, quant_signal: dict | None = None) -> str:
     """For each fund manager holding this stock, render a performance card.
     managers = [
       {
@@ -132,6 +140,15 @@ def render_fund_managers(managers: list) -> str:
       },
     ]
     """
+    if quant_signal is not None:
+        sig = escape_payload(quant_signal)
+        status = {"available": "样本可用", "partial": "部分缺失", "unavailable": "证据不足",
+                  "not_scanned": "未扫描", "not_applicable": "不适用"}.get(sig.get("evidence_status"), "未知")
+        periods = "、".join(sig.get("report_periods") or []) or "未取得"
+        note = (f'<p class="fund-evidence">分散持仓启发式：{status}；报告期：{periods}；'
+                f'可用样本 {sig.get("verified_funds_total", 0)}/{sig.get("active_funds_total", 0)}。'
+                '仅限已扫描基金；不代表确认的量化策略，未核验公告时间，不用于历史时点回测。</p>')
+        return note + render_fund_managers(managers)
     managers = escape_payload(managers)
     if not managers:
         return '<div style="padding:24px;text-align:center;color:#94a3b8;font-size:12px">暂无公募基金持仓数据</div>'
@@ -405,10 +422,11 @@ def render_panel_insights(syn: dict, panel: dict) -> str:
                 dominant[0], dominant[0]
             )
             grp_summary.append(f"{label} {c['bullish']}✓ / {c['bearish']}✗（主流 {tag}）")
+        consensus_text = f"{cons:.0f}%" if cons is not None and panel.get("consensus_valid", True) else "不可用"
         insights = (
-            f"<strong>51 位评委投票聚合</strong>："
-            f"{bull} 看多 · {neu} 中性 · {bear} 看空 · {skip} 不适合该市场。"
-            f"共识度 <strong>{cons:.0f}%</strong>（neutral 半权计入）。"
+            f"<strong>{bull + neu + bear + skip} 位多头评委投票聚合</strong>："
+            f"{bull} 看多 · {neu} 中性 · {bear} 看空 · {skip} 弃权。"
+            f"共识度 <strong>{consensus_text}</strong>（弃权不计入有效票）。"
             f"<br><br><strong>按流派分布</strong>："
             + "；".join(grp_summary) + "。"
         )

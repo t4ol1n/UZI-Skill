@@ -469,11 +469,11 @@ def assemble(ticker: str) -> Path:
         # 没选出多空代表，应该显示占位而不是错误的头像+空数据
         "{{BULL_ID}}": _safe(bull.get("investor_id"), "_placeholder"),
         "{{BULL_NAME}}": _safe(bull.get("name"), "（未选出）"),
-        "{{BULL_SCORE}}": str(divide.get("bull_score", 0)),
+        "{{BULL_SCORE}}": str(divide["bull_score"]) if divide.get("bull_score") is not None else "—",
         "{{BULL_LAST_SAY}}": _safe(last_round.get("bull_say"), "—"),
         "{{BEAR_ID}}": _safe(bear.get("investor_id"), "_placeholder"),
         "{{BEAR_NAME}}": _safe(bear.get("name"), "（未选出）"),
-        "{{BEAR_SCORE}}": str(divide.get("bear_score", 0)),
+        "{{BEAR_SCORE}}": str(divide["bear_score"]) if divide.get("bear_score") is not None else "—",
         "{{BEAR_LAST_SAY}}": _safe(last_round.get("bear_say"), "—"),
         "{{PUNCHLINE}}": _safe(divide.get("punchline") or debate.get("punchline")),
         "{{ZONE_VALUE_PRICE}}": str(_safe((zones.get("value") or {}).get("price"))),
@@ -488,7 +488,7 @@ def assemble(ticker: str) -> Path:
         "{{BULL_COUNT}}": str(bull_count),
         "{{BEAR_COUNT}}": str(bear_count),
         "{{NEUT_COUNT}}": str(neut_count),
-        "{{CONSENSUS_PCT}}": f"{panel.get('panel_consensus', 0):.0f}",
+        "{{CONSENSUS_PCT}}": f"{panel['panel_consensus']:.0f}" if panel.get("panel_consensus") is not None and panel.get("consensus_valid", True) else "—",
         "{{BULL_TAG}}": _safe((bull.get("group") and GROUP_LABELS.get(bull.get("group"))) or bull.get("tagline"), ""),
         "{{BEAR_TAG}}": _safe((bear.get("group") and GROUP_LABELS.get(bear.get("group"))) or bear.get("tagline"), ""),
         "{{BULL_SIGNAL_CN}}": {"bullish": "看多", "neutral": "中性", "bearish": "看空"}.get(divide.get("bull_signal", ""), "看多"),
@@ -566,7 +566,7 @@ def assemble(ticker: str) -> Path:
     fund_managers = (syn.get("fund_managers") or raw.get("fund_managers") or [])
     template = template.replace(
         "<!-- INJECT_FUND_MANAGERS -->",
-        render_fund_managers(fund_managers),
+        render_fund_managers(fund_managers, syn.get("quant_signal")),
     )
 
     # 19 维深度数据卡 · 6 大类
